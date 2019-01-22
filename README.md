@@ -21,7 +21,7 @@ CREATE TABLE `requestlogs` (
   `id` int(11) NOT NULL,
   `method` varchar(255) DEFAULT NULL,
   `host` varchar(255) DEFAULT NULL,
-  `path` varchar(255) DEFAULT NULL,
+  `path` text DEFAULT NULL,
   `requestheaders` text,
   `requestQuery` text,
   `requestBody` text,
@@ -35,7 +35,6 @@ CREATE TABLE `requestlogs` (
 ALTER TABLE `requestlogs`
   ADD PRIMARY KEY (`id`),
   ADD KEY `host` (`host`),
-  ADD KEY `path` (`path`),
   ADD KEY `createdAt` (`createdAt`);
 
 ALTER TABLE `requestlogs` MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;

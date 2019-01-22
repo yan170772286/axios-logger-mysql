@@ -1,5 +1,5 @@
 {
-  "name": "axios-logger-mysql",
+  "name": "yy-axios-logger-mysql",
   "version": "1.0.0",
   "description": "An Axios interceptor that logs all axios requests and responses to a MySQL table.",
   "main": "src/index.js",

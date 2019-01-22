@@ -51,7 +51,7 @@ function createRequestObject({
 
   return {
     method: axiosRequest.method || axiosConfig.method.toUpperCase(),
-    path: axiosRequest.path || url.pathname,
+    path: url.pathname || axiosRequest.path,
     headers: requestHeaders,
     query: {
       ...qs.parse(url.search.replace('?', '')),
