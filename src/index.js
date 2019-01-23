@@ -114,9 +114,14 @@ function buildInsertArray(selectedColumns, insertData){
         }
         break;
       case 'responseBody':
-        if(insertData.response){
-          result.push(JSON.stringify(insertData.response.body));
-        }else{
+        try {
+          if(insertData.response){
+         
+            result.push(JSON.stringify(insertData.response.body));
+          }else{
+            result.push('');
+          }
+        } catch (error) {
           result.push('');
         }
         break;
@@ -164,13 +169,18 @@ const logResponse = (
     };
 
     const sql = `INSERT INTO ${table} (${selectedColumns.join(",")}) VALUES ?`;
-    const insertArray = buildInsertArray(selectedColumns,insertData);
-    const values = [
-      insertArray,
-    ];
-    db.query(sql, [values], function (err, result) {
-      if (err) throw err;
-    });
+    try {
+      const insertArray = buildInsertArray(selectedColumns,insertData);
+      const values = [
+        insertArray,
+      ];
+      db.query(sql, [values], function (err, result) {
+        if (err) throw err;
+      });
+    } catch (error) {
+      console.log(error)
+    }
+   
     
     return axiosResponse;
 };
