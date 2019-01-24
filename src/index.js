@@ -1,11 +1,10 @@
+const { URL } = require("url");
+const qs = require("querystring");
+const mysql = require("mysql");
+const mapKeys = require("lodash/mapKeys");
+const _ = require("lodash");
 
-const { URL } = require('url');
-const qs = require('querystring');
-const mysql = require('mysql');
-const mapKeys = require('lodash/mapKeys');
-const _ = require('lodash');
-
-const NAMESPACE = 'axios-logger-mysql';
+const NAMESPACE = "axios-logger-mysql";
 
 const logRequest = () => axiosConfig => {
   axiosConfig[NAMESPACE] = Object.assign(
@@ -18,20 +17,20 @@ const logRequest = () => axiosConfig => {
 function createRequestObject({
   axiosConfig,
   axiosRequest,
-  transformRequestBody,
+  transformRequestBody
 }) {
   const url = new URL(axiosConfig.url);
 
   const requestHeaders = {
     host: url.host,
-    ...mapKeys(axiosConfig.headers, (val, key) => key.toLowerCase()),
+    ...mapKeys(axiosConfig.headers, (val, key) => key.toLowerCase())
   };
 
   let requestBody;
 
   if (
-    requestHeaders['content-type'] &&
-    requestHeaders['content-type'].startsWith('application/json')
+    requestHeaders["content-type"] &&
+    requestHeaders["content-type"].startsWith("application/json")
   ) {
     try {
       requestBody = JSON.parse(axiosConfig.data);
@@ -42,10 +41,10 @@ function createRequestObject({
     requestBody = axiosConfig.data || null;
   }
 
-  if (requestBody && typeof transformRequestBody === 'function') {
+  if (requestBody && typeof transformRequestBody === "function") {
     requestBody = transformRequestBody(requestBody, {
       request: axiosRequest,
-      config: axiosConfig,
+      config: axiosConfig
     });
   }
 
@@ -54,87 +53,86 @@ function createRequestObject({
     path: url.pathname || axiosRequest.path,
     headers: requestHeaders,
     query: {
-      ...qs.parse(url.search.replace('?', '')),
-      ...axiosConfig.params,
+      ...qs.parse(url.search.replace("?", "")),
+      ...axiosConfig.params
     },
-    body: requestBody,
+    body: requestBody
   };
 }
 
 function createResponseObject({ axiosResponse, transformResponseBody }) {
   let body = axiosResponse.data || null;
-  if (body && typeof transformResponseBody === 'function') {
+  if (body && typeof transformResponseBody === "function") {
     body = transformResponseBody(body, {
       response: axiosResponse,
-      config: axiosResponse.config,
+      config: axiosResponse.config
     });
   }
   return {
     status: axiosResponse.status,
     statusText: axiosResponse.statusText,
     headers: axiosResponse.headers,
-    body,
+    body
   };
 }
 
-function buildInsertArray(selectedColumns, insertData){
+function buildInsertArray(selectedColumns, insertData) {
   let result = [];
   selectedColumns.forEach(key => {
     switch (key) {
-      case 'method':
-        result.push(insertData.request.method)
+      case "method":
+        result.push(insertData.request.method);
         break;
-      case 'host':
-        result.push(insertData.request.headers.host)
+      case "host":
+        result.push(insertData.request.headers.host);
         break;
-      case 'path':
-        result.push(insertData.request.path)
+      case "path":
+        result.push(insertData.request.path);
         break;
-      case 'requestheaders':
+      case "requestheaders":
         result.push(JSON.stringify(insertData.request.headers));
         break;
-      case 'requestQuery':
+      case "requestQuery":
         result.push(JSON.stringify(insertData.request.query));
         break;
-      case 'requestBody':
+      case "requestBody":
         result.push(JSON.stringify(insertData.request.body));
         break;
-      case 'responseStatus':
-        if(insertData.response){
+      case "responseStatus":
+        if (insertData.response) {
           result.push(insertData.response.status);
-        }else{
-          result.push('');
+        } else {
+          result.push("");
         }
         break;
-      case 'responseHeaders':
-        if(insertData.response){
+      case "responseHeaders":
+        if (insertData.response) {
           result.push(JSON.stringify(insertData.response.headers));
-        }else{
-          result.push('');
+        } else {
+          result.push("");
         }
         break;
-      case 'responseBody':
+      case "responseBody":
         try {
-          if(insertData.response){
-         
+          if (insertData.response) {
             result.push(JSON.stringify(insertData.response.body));
-          }else{
-            result.push('');
+          } else {
+            result.push("");
           }
         } catch (error) {
-          result.push('');
+          result.push("");
         }
         break;
-      case 'responseError':
+      case "responseError":
         result.push(JSON.stringify(insertData.error));
         break;
-      case 'responseTime':
+      case "responseTime":
         result.push(insertData.time);
         break;
-      case 'createdAt':
-        result.push(new Date())
+      case "createdAt":
+        result.push(new Date());
         break;
-      
+
       default:
         break;
     }
@@ -142,50 +140,65 @@ function buildInsertArray(selectedColumns, insertData){
   return result;
 }
 const logResponse = (
-    table, db, selectedColumns,
-    { transformRequestBody, transformResponseBody } = {},
-  ) => (axiosResponse) => {
-    const axiosConfig = axiosResponse.config;
-    const axiosRequest = axiosResponse.request;
+  table,
+  pool,
+  selectedColumns,
+  { transformRequestBody, transformResponseBody } = {}
+) => axiosResponse => {
+  const axiosConfig = axiosResponse.config;
+  const axiosRequest = axiosResponse.request;
 
-    const { requestTimestamp } = axiosConfig[NAMESPACE];
-    const responseTimestamp = Date.now();
+  const { requestTimestamp } = axiosConfig[NAMESPACE];
+  const responseTimestamp = Date.now();
 
-    const request = createRequestObject({
-      axiosConfig,
-      axiosRequest,
-      transformRequestBody,
+  const request = createRequestObject({
+    axiosConfig,
+    axiosRequest,
+    transformRequestBody
+  });
+  const response = createResponseObject({
+    axiosResponse,
+    transformResponseBody
+  });
+
+  const insertData = {
+    request,
+    response,
+    error: null,
+    time: responseTimestamp - requestTimestamp
+  };
+
+  const sql = `INSERT INTO ${table} (${selectedColumns.join(",")}) VALUES ?`;
+  try {
+    const insertArray = buildInsertArray(selectedColumns, insertData);
+    const values = [insertArray];
+    pool.getConnection((err, connection) => {
+      if (err) {
+        console.log(error);
+      } else {
+        try {
+          connection.query(sql, [values], function(err, result) {
+            // if (err) throw err;
+            connection.release();
+          });
+        } catch (error) {
+          console.log(error);
+        }
+      }
     });
-    const response = createResponseObject({
-      axiosResponse,
-      transformResponseBody,
-    });
+  } catch (error) {
+    console.log(error);
+  }
 
-    const insertData = {
-      request,
-      response,
-      error: null,
-      time: responseTimestamp - requestTimestamp,
-    };
-
-    const sql = `INSERT INTO ${table} (${selectedColumns.join(",")}) VALUES ?`;
-    try {
-      const insertArray = buildInsertArray(selectedColumns,insertData);
-      const values = [
-        insertArray,
-      ];
-      db.query(sql, [values], function (err, result) {
-        if (err) throw err;
-      });
-    } catch (error) {
-      console.log(error)
-    }
-   
-    
-    return axiosResponse;
+  return axiosResponse;
 };
 
-const logError = (table, db, selectedColumns, { transformRequestBody, transformResponseBody } = {}) => (axiosError) => {
+const logError = (
+  table,
+  db,
+  selectedColumns,
+  { transformRequestBody, transformResponseBody } = {}
+) => axiosError => {
   const axiosConfig = axiosError.config;
   const axiosRequest = axiosError.request;
 
@@ -195,11 +208,11 @@ const logError = (table, db, selectedColumns, { transformRequestBody, transformR
   const request = createRequestObject({
     axiosConfig,
     axiosRequest,
-    transformRequestBody,
+    transformRequestBody
   });
 
   const response = createResponseObject({
-    axiosResponse:axiosError.response,
+    axiosResponse: axiosError.response,
     transformResponseBody
   });
 
@@ -209,14 +222,12 @@ const logError = (table, db, selectedColumns, { transformRequestBody, transformR
     request,
     response,
     error,
-    time: errorTimestamp - requestTimestamp,
+    time: errorTimestamp - requestTimestamp
   };
   const sql = `INSERT INTO ${table} (${selectedColumns.join(",")}) VALUES ?`;
   const insertArray = buildInsertArray(selectedColumns, insertData);
-  const values = [
-    insertArray,
-  ];
-  db.query(sql, [values], function (err, result) {
+  const values = [insertArray];
+  db.query(sql, [values], function(err, result) {
     if (err) throw err;
   });
 
@@ -228,40 +239,59 @@ function useMysqlLogger(
   {
     host,
     user,
-    password = '',
+    password = "",
     database,
     table,
     port = 3306,
     excludeColumns = [],
     allInstances = false,
     transformRequestBody,
-    transformResponseBody,
+    transformResponseBody
   }
 ) {
-  const db = mysql.createConnection({
+  // const db = mysql.createConnection({
+  //   host,
+  //   user,
+  //   password,
+  //   database,
+  //   port,
+  // });
+  var pool = mysql.createPool({
     host,
     user,
     password,
     database,
-    port,
+    port
   });
 
-  db.connect((err) => {
-    if (err) {
-      throw err;
-    }
-  });
-  const tableColumns = ['method', 'host', 'path',
-    'requestheaders', 'requestQuery', 'requestBody',
-    'responseStatus', 'responseHeaders', 'responseBody', 'responseError', 'responseTime', 'createdAt'
+  // db.connect((err) => {
+  //   if (err) {
+  //     throw err;
+  //   }
+  // });
+  const tableColumns = [
+    "method",
+    "host",
+    "path",
+    "requestheaders",
+    "requestQuery",
+    "requestBody",
+    "responseStatus",
+    "responseHeaders",
+    "responseBody",
+    "responseError",
+    "responseTime",
+    "createdAt"
   ];
-  
+
   const selectedColumns = _.difference(tableColumns, excludeColumns);
 
   axios.interceptors.request.use(logRequest(table));
   axios.interceptors.response.use(
-    logResponse(table, db, selectedColumns, { transformRequestBody, transformResponseBody }),
-    logError(table, db, selectedColumns, { transformRequestBody, transformResponseBody })
+    logResponse(table, pool, selectedColumns, {
+      transformRequestBody,
+      transformResponseBody
+    })
   );
 
   if (allInstances && axios.create) {
@@ -277,7 +307,7 @@ function useMysqlLogger(
         database,
         table,
         transformRequestBody,
-        transformResponseBody,
+        transformResponseBody
       });
 
       return instance;
@@ -286,5 +316,5 @@ function useMysqlLogger(
 }
 
 module.exports = {
-  useMysqlLogger,
+  useMysqlLogger
 };
