@@ -174,7 +174,7 @@ const logResponse = (
     const values = [insertArray];
     pool.getConnection((err, connection) => {
       if (err) {
-        console.log(error);
+        console.log(err);
       } else {
         try {
           connection.query(sql, [values], function(err, result) {
